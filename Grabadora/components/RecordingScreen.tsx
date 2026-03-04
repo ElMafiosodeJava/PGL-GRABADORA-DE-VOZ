@@ -1,24 +1,67 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react"; 
 import {
   Button,
   StatusBar,
   StyleSheet,
   Text,
   View,
-  ScrollView, 
+  ScrollView,
 } from "react-native";
 import { Audio } from "expo-av";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+type StoredRecording = {
+  uri: string;
+  durationMillis: number;
+};
 
 type RecordingItem = {
   sound: Audio.Sound;
   duration: string;
-  file: string | null;
+  file: string; 
+  durationMillis: number; 
 };
+
+const STORAGE_KEY = "PGL_SOUNDRECORDER_URIS"; 
 
 const RecordingScreen = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
   const [message, setMessage] = useState<string>("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        const stored: StoredRecording[] = JSON.parse(raw);
+
+        const loaded: RecordingItem[] = [];
+        for (const item of stored) {
+          const { sound } = await Audio.Sound.createAsync({ uri: item.uri });
+          loaded.push({
+            sound,
+            file: item.uri,
+            durationMillis: item.durationMillis,
+            duration: getDurationFormatted(item.durationMillis),
+          });
+        }
+
+        setRecordings(loaded);
+      } catch (e) {
+        console.error("Failed to load recordings from storage", e);
+      }
+    })();
+  }, []);
+
+  async function persistRecordings(next: RecordingItem[]) {
+    const payload: StoredRecording[] = next.map((r) => ({
+      uri: r.file,
+      durationMillis: r.durationMillis,
+    }));
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }
 
   async function startRecording() {
     try {
@@ -58,15 +101,26 @@ const RecordingScreen = () => {
         await currentRecording.createNewLoadedSoundAsync();
 
       const durationMillis = status.isLoaded ? (status.durationMillis ?? 0) : 0;
+      const uri = currentRecording.getURI();
 
-      setRecordings((prev) => [
-        ...prev,
-        {
-          sound,
-          duration: getDurationFormatted(durationMillis),
-          file: currentRecording.getURI(),
-        },
-      ]);
+      if (!uri) {
+        setMessage("Recording saved but URI was null");
+        setRecording(null);
+        return;
+      }
+
+      const nextItem: RecordingItem = {
+        sound,
+        duration: getDurationFormatted(durationMillis),
+        file: uri,
+        durationMillis,
+      };
+
+      setRecordings((prev) => {
+        const next = [...prev, nextItem];
+        persistRecordings(next).catch(() => {});
+        return next;
+      });
 
       setRecording(null);
     } catch (error) {
@@ -81,7 +135,12 @@ const RecordingScreen = () => {
       const item = recordings[index];
       if (item?.sound) await item.sound.unloadAsync();
     } catch {}
-    setRecordings((prev) => prev.filter((_, i) => i !== index));
+
+    setRecordings((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      persistRecordings(next).catch(() => {});
+      return next;
+    });
   }
 
   async function clearAllRecordings() {
@@ -93,6 +152,7 @@ const RecordingScreen = () => {
       }
     } finally {
       setRecordings([]);
+      await AsyncStorage.removeItem(STORAGE_KEY);
     }
   }
 
@@ -161,7 +221,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16, 
+    padding: 16,
   },
   list: {
     alignSelf: "stretch",
