@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react"; 
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator, 
   Button,
   StatusBar,
   StyleSheet,
@@ -18,20 +19,34 @@ type StoredRecording = {
 type RecordingItem = {
   sound: Audio.Sound;
   duration: string;
-  file: string; 
-  durationMillis: number; 
+  file: string;
+  durationMillis: number;
 };
 
-const STORAGE_KEY = "PGL_SOUNDRECORDER_URIS"; 
+const STORAGE_KEY = "PGL_SOUNDRECORDER_URIS";
+
+const LoadingIndicator = ({ label }: { label: string }) => {
+  return (
+    <View style={styles.loaderWrap}>
+      <ActivityIndicator />
+      <Text style={styles.loaderText}>{label}</Text>
+    </View>
+  );
+};
 
 const RecordingScreen = () => {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
   const [message, setMessage] = useState<string>("");
 
+  const [isLoadingInitial, setIsLoadingInitial] = useState<boolean>(true);
+  const [isRecordingBusy, setIsRecordingBusy] = useState<boolean>(false);
+
   useEffect(() => {
     (async () => {
       try {
+        setIsLoadingInitial(true); 
+
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (!raw) return;
 
@@ -51,6 +66,8 @@ const RecordingScreen = () => {
         setRecordings(loaded);
       } catch (e) {
         console.error("Failed to load recordings from storage", e);
+      } finally {
+        setIsLoadingInitial(false); 
       }
     })();
   }, []);
@@ -66,6 +83,7 @@ const RecordingScreen = () => {
   async function startRecording() {
     try {
       setMessage("");
+      setIsRecordingBusy(true); 
 
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== "granted") {
@@ -86,6 +104,8 @@ const RecordingScreen = () => {
     } catch (error) {
       console.error("Failed to start recording", error);
       setMessage("Failed to start recording");
+    } finally {
+      setIsRecordingBusy(false); 
     }
   }
 
@@ -93,6 +113,8 @@ const RecordingScreen = () => {
     if (!recording) return;
 
     try {
+      setIsRecordingBusy(true); 
+
       const currentRecording = recording;
 
       await currentRecording.stopAndUnloadAsync();
@@ -127,6 +149,8 @@ const RecordingScreen = () => {
       console.error("Failed to stop recording", error);
       setMessage("Failed to stop recording");
       setRecording(null);
+    } finally {
+      setIsRecordingBusy(false); 
     }
   }
 
@@ -198,6 +222,10 @@ const RecordingScreen = () => {
 
       {recording ? <Text style={styles.recordingIndicator}>● Recording...</Text> : null}
 
+      {isLoadingInitial ? <LoadingIndicator label="Loading recordings..." /> : null}
+
+      {isRecordingBusy ? <LoadingIndicator label="Working..." /> : null}
+
       {recordings.length > 0 ? (
         <View style={styles.clearAllWrap}>
           <Button title="Delete all" onPress={clearAllRecordings} />
@@ -249,4 +277,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   message: { marginBottom: 8 },
+
+  loaderWrap: {
+    marginTop: 10,
+    alignItems: "center",
+  },
+  loaderText: {
+    marginTop: 6,
+  },
 });
