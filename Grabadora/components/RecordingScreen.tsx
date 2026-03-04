@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Button, StatusBar, StyleSheet, Text, View } from "react-native";
+import {
+  Button,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  ScrollView, 
+} from "react-native";
 import { Audio } from "expo-av";
 
 type RecordingItem = {
@@ -69,21 +76,14 @@ const RecordingScreen = () => {
     }
   }
 
-  // [EJ1 - NUEVO] borrar un audio individual
   async function deleteRecording(index: number) {
     try {
       const item = recordings[index];
-      if (item?.sound) {
-        await item.sound.unloadAsync();
-      }
-    } catch (e) {
-      // si falla el unload, igual seguimos eliminando del estado
-    }
-
+      if (item?.sound) await item.sound.unloadAsync();
+    } catch {}
     setRecordings((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // [EJ1 - NUEVO] borrar todos
   async function clearAllRecordings() {
     try {
       for (const r of recordings) {
@@ -112,7 +112,6 @@ const RecordingScreen = () => {
             Recording {index + 1} - {recordingLine.duration}
           </Text>
 
-          {/* [EJ1 - NUEVO] Button no acepta style → envolvemos en View */}
           <View style={styles.buttonWrap}>
             <Button
               onPress={() => recordingLine.sound.replayAsync()}
@@ -120,7 +119,6 @@ const RecordingScreen = () => {
             />
           </View>
 
-          {/* [EJ1 - NUEVO] borrar individual */}
           <View style={styles.buttonWrap}>
             <Button onPress={() => deleteRecording(index)} title={"Delete"} />
           </View>
@@ -138,17 +136,17 @@ const RecordingScreen = () => {
         onPress={recording ? stopRecording : startRecording}
       />
 
-      {/* [EJ1 - NUEVO] indicador grabando */}
       {recording ? <Text style={styles.recordingIndicator}>● Recording...</Text> : null}
 
-      {/* [EJ1 - NUEVO] borrar todos */}
       {recordings.length > 0 ? (
         <View style={styles.clearAllWrap}>
           <Button title="Delete all" onPress={clearAllRecordings} />
         </View>
       ) : null}
 
-      {getRecordingLines()}
+      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        {getRecordingLines()}
+      </ScrollView>
 
       <StatusBar />
     </View>
@@ -163,25 +161,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
+    padding: 16, 
+  },
+  list: {
+    alignSelf: "stretch",
+    marginTop: 10,
+  },
+  listContent: {
+    paddingBottom: 30,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
   },
   fill: {
     flex: 1,
     margin: 10,
   },
-  // [EJ1 - NUEVO]
   buttonWrap: {
     margin: 6,
   },
-  // [EJ1 - NUEVO]
   clearAllWrap: {
     marginTop: 10,
   },
-  // [EJ1 - NUEVO]
   recordingIndicator: {
     marginTop: 8,
     marginBottom: 8,
