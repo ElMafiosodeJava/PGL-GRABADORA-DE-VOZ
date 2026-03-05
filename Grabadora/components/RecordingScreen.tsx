@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator, 
+  ActivityIndicator,
   Button,
   StatusBar,
   StyleSheet,
@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Audio } from "expo-av";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Accelerometer } from "expo-sensors"; 
 
 type StoredRecording = {
   uri: string;
@@ -42,10 +43,16 @@ const RecordingScreen = () => {
   const [isLoadingInitial, setIsLoadingInitial] = useState<boolean>(true);
   const [isRecordingBusy, setIsRecordingBusy] = useState<boolean>(false);
 
+  const [accel, setAccel] = useState<{ x: number; y: number; z: number }>({
+    x: 0,
+    y: 0,
+    z: 0,
+  });
+
   useEffect(() => {
     (async () => {
       try {
-        setIsLoadingInitial(true); 
+        setIsLoadingInitial(true);
 
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (!raw) return;
@@ -67,9 +74,21 @@ const RecordingScreen = () => {
       } catch (e) {
         console.error("Failed to load recordings from storage", e);
       } finally {
-        setIsLoadingInitial(false); 
+        setIsLoadingInitial(false);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    Accelerometer.setUpdateInterval(500);
+
+    const sub = Accelerometer.addListener((data) => {
+      setAccel({ x: data.x ?? 0, y: data.y ?? 0, z: data.z ?? 0 });
+    });
+
+    return () => {
+      sub.remove();
+    };
   }, []);
 
   async function persistRecordings(next: RecordingItem[]) {
@@ -83,7 +102,7 @@ const RecordingScreen = () => {
   async function startRecording() {
     try {
       setMessage("");
-      setIsRecordingBusy(true); 
+      setIsRecordingBusy(true);
 
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== "granted") {
@@ -105,7 +124,7 @@ const RecordingScreen = () => {
       console.error("Failed to start recording", error);
       setMessage("Failed to start recording");
     } finally {
-      setIsRecordingBusy(false); 
+      setIsRecordingBusy(false);
     }
   }
 
@@ -113,7 +132,7 @@ const RecordingScreen = () => {
     if (!recording) return;
 
     try {
-      setIsRecordingBusy(true); 
+      setIsRecordingBusy(true);
 
       const currentRecording = recording;
 
@@ -150,7 +169,7 @@ const RecordingScreen = () => {
       setMessage("Failed to stop recording");
       setRecording(null);
     } finally {
-      setIsRecordingBusy(false); 
+      setIsRecordingBusy(false);
     }
   }
 
@@ -223,8 +242,11 @@ const RecordingScreen = () => {
       {recording ? <Text style={styles.recordingIndicator}>● Recording...</Text> : null}
 
       {isLoadingInitial ? <LoadingIndicator label="Loading recordings..." /> : null}
-
       {isRecordingBusy ? <LoadingIndicator label="Working..." /> : null}
+
+      <Text style={styles.sensorText}>
+        Accel x:{accel.x.toFixed(2)} y:{accel.y.toFixed(2)} z:{accel.z.toFixed(2)}
+      </Text>
 
       {recordings.length > 0 ? (
         <View style={styles.clearAllWrap}>
@@ -284,5 +306,9 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     marginTop: 6,
+  },
+
+  sensorText: {
+    marginTop: 10,
   },
 });
